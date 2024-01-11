@@ -330,7 +330,7 @@ public class MallController {
         } else {
             HttpHeaders headers = new HttpHeaders();
             headers.add(HttpHeaders.CONTENT_TYPE, "application/json");
-            if (old.get().getQrUrl() == null)
+            if (old.get().getQrUrl() != null)
             {
                 GetQrCodeResponse body = new GetQrCodeResponse();
                 body.setErrcode(0);
