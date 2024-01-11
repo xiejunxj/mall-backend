@@ -323,14 +323,25 @@ public class MallController {
 
     @PostMapping("/mallUserGetQrCode")
     public ResponseEntity<Object> getQrCode(@RequestBody GetQrcodeRequest user) {
-        Optional<User> old = repository.findByOpenId(user.getOpenId());
+        Optional<User> old = repository.findByOpenId(user.getUserId());
         if (!old.isPresent()) {
-            logger.warn("There is no such user but request update {}", user.getOpenId());
+            logger.warn("There is no such user but request update {}", user.getUserId());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         } else {
             HttpHeaders headers = new HttpHeaders();
             headers.add(HttpHeaders.CONTENT_TYPE, "application/json");
+            if (old.get().getQrUrl() == null)
+            {
+                GetQrCodeResponse body = new GetQrCodeResponse();
+                body.setErrcode(0);
+                body.setUrl(old.get().getQrUrl());
+                return new ResponseEntity<>(body, headers, HttpStatus.OK);
+            }
             GetQrCodeResponse body = wxServiceClient.getQrCode(user);
+            if (body.getErrcode() == 0) {
+                old.get().setQrUrl(body.getUrl());
+                this.repository.save(old.get());
+            }
             return new ResponseEntity<>(body, headers, HttpStatus.OK);
         }
     }

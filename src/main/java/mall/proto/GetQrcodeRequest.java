@@ -1,13 +1,13 @@
 package mall.proto;
 
 public class GetQrcodeRequest {
-    String openId;
+    String userId;
 
-    public String getOpenId() {
-        return openId;
+    public String getUserId() {
+        return userId;
     }
 
-    public void setOpenId(String openId) {
-        this.openId = openId;
+    public void setUserId(String userId) {
+        this.userId = userId;
     }
 }

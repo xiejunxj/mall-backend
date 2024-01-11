@@ -148,18 +148,18 @@ public class WxServiceClientImpl implements WxServiceClient{
             SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
             restTemplate.setRequestFactory(requestFactory);
             Map<String, Object> param = new HashMap<>(3);
-            param.put("scene", request.getOpenId());
+            param.put("scene", request.getUserId());
             param.put("page", "pages/index/index");
             param.put("width", 247);
             String url = "https://api.weixin.qq.com/wxa/getwxacodeunlimit?access_token=" + accessTokenStr;
             ResponseEntity<byte[]> responseEntity = restTemplate.postForEntity(url, JSON.toJSONString(param), byte[].class);
             byte[] qrBytes = responseEntity.getBody();
-            String path = this.getAvatarStorePath() + "/qr_" +  request.getOpenId() + ".png";
+            String path = this.getAvatarStorePath() + "/qr_" +  request.getUserId() + ".png";
             FileUtils.writeByteArrayToFile(new File(path), qrBytes);
-            rspQr.setUrl(this.serverRootUrl + this.httpDir + "/qr_" + request.getOpenId() + ".png");
+            rspQr.setUrl(this.serverRootUrl + this.httpDir + "/qr_" + request.getUserId() + ".png");
         } catch (Exception e) {
             rspQr.setErrcode(-1);
-            logger.error("req QrCode error {} {}", request.getOpenId(), e.getMessage());
+            logger.error("req QrCode error {} {}", request.getUserId(), e.getMessage());
         }
         return rspQr;
     }

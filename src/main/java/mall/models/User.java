@@ -32,6 +32,7 @@ public class User {
 
     private String buyTime;
     private String buyOrigin;
+    private String qrUrl;
     public Long getId() {
         return id;
     }
@@ -134,5 +135,13 @@ public class User {
 
     public void setBuyOrigin(String buyOrigin) {
         this.buyOrigin = buyOrigin;
+    }
+
+    public String getQrUrl() {
+        return qrUrl;
+    }
+
+    public void setQrUrl(String qrUrl) {
+        this.qrUrl = qrUrl;
     }
 }
