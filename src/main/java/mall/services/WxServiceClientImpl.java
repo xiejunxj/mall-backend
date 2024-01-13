@@ -151,7 +151,7 @@ public class WxServiceClientImpl implements WxServiceClient{
             param.put("scene", request.getUserId());
             param.put("page", "pages/index/index");
             param.put("width", 247);
-            param.put("env_version", "trial");
+            //param.put("env_version", "trial");
             String url = "https://api.weixin.qq.com/wxa/getwxacodeunlimit?access_token=" + accessTokenStr;
             ResponseEntity<byte[]> responseEntity = restTemplate.postForEntity(url, JSON.toJSONString(param), byte[].class);
             byte[] qrBytes = responseEntity.getBody();

@@ -10,4 +10,5 @@ public class MallApplication {
         SpringApplication app = new SpringApplication(MallApplication.class);
         app.run(args);
     }
+
 }

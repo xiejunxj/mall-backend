@@ -7,6 +7,10 @@ public class GetPageInfoResponse {
 
     private List<BuyUserResponse> buyUserInfos;
 
+    private int scanNum;
+
+    private int buyerNum;
+
     public List<OrganizationInfo> getOrganizationInfos() {
         return organizationInfos;
     }
@@ -21,5 +25,21 @@ public class GetPageInfoResponse {
 
     public void setBuyUserInfos(List<BuyUserResponse> buyUserInfos) {
         this.buyUserInfos = buyUserInfos;
+    }
+
+    public int getScanNum() {
+        return scanNum;
+    }
+
+    public void setScanNum(int scanNum) {
+        this.scanNum = scanNum;
+    }
+
+    public int getBuyerNum() {
+        return buyerNum;
+    }
+
+    public void setBuyerNum(int buyerNum) {
+        this.buyerNum = buyerNum;
     }
 }

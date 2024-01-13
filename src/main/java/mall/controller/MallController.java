@@ -21,6 +21,8 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
 import javax.servlet.http.HttpServletRequest;
 import java.io.File;
 import java.io.IOException;
@@ -33,17 +35,32 @@ import static mall.cache.OrganizationInfoCache.OrgCacheEntity;
 @Validated
 @ComponentScan(basePackageClasses = {mall.services.WxServiceClient.class,
         mall.services.WxPayServiceClient.class, UserRepository.class})
-public class MallController {
+public class MallController{
 
     private Logger logger = LoggerFactory.getLogger(getClass());
 
     private final UserRepository repository;
+
+    private final ProjectRepository projectRepository;
 
     private final WxServiceClient wxServiceClient;
 
     private final WxPayServiceClient wxPayServiceClient;
 
     private BuyerCache buyerCache;
+
+    @Value("${mall.projectId}")
+    private int projectId;
+
+    private Long projectUid;
+
+    public Long getProjectUid() {
+        return projectUid;
+    }
+
+    public void setProjectUid(Long projectUid) {
+        this.projectUid = projectUid;
+    }
 
     @Value("${mall.avatar-path}")
     private String avatarStorePath;
@@ -60,17 +77,69 @@ public class MallController {
     @Value("${mall.lessonPrice}")
     private int lessonPrice;
 
-    public MallController(UserRepository repository, WxServiceClient wxServiceClient,
+    private int scanNum;
+    private int active;
+    public MallController(UserRepository repository, ProjectRepository projectRepository, WxServiceClient wxServiceClient,
                           WxPayServiceClient wxPayServiceClient, BuyerCache buyerCache) {
 
         this.repository = repository;
+        this.projectRepository = projectRepository;
         this.wxServiceClient = wxServiceClient;
         this.wxPayServiceClient = wxPayServiceClient;
         this.buyerCache = buyerCache;
         this.wxPayServiceClient.start();
-        this.buyerCache.Start();
     }
 
+    @PostConstruct
+    public void Init() {
+        this.buyerCache.Start();
+        Optional<Project> project = this.projectRepository.findByProjId(this.projectId);
+        if (!project.isPresent()) {
+            logger.error("ProjectId not in the table {}", this.projectId);
+            System.exit(-1);
+        }
+        this.setScanNum(project.get().getScanNum());
+        this.setActive(project.get().getValid());
+        this.setProjectUid(project.get().getId());
+    }
+
+    @PreDestroy
+    public void preDestroy(){
+        logger.info("PreDestroy>>>>");
+        Optional<Project> project = this.projectRepository.findByProjId(this.projectId);
+        if (project.isPresent()) {
+            project.get().setScanNum(this.getScanNum());
+            this.projectRepository.saveAndFlush(project.get());
+        }
+        logger.info("MallController auto save info when exit {}", this.getScanNum());
+    }
+    public int getActive() {
+        return active;
+    }
+
+    public void setActive(int active) {
+        this.active = active;
+    }
+
+    public int getProjectId() {
+        return projectId;
+    }
+
+    public void setProjectId(int projectId) {
+        this.projectId = projectId;
+    }
+
+    public int getScanNum() {
+        return scanNum;
+    }
+
+    public void setScanNum(int scanNum) {
+        this.scanNum = scanNum;
+    }
+
+    public void AddScanNum() {
+        this.scanNum += 1;
+    }
     public String getAvatarStorePath() {
         return avatarStorePath;
     }
@@ -187,6 +256,9 @@ public class MallController {
             List<OrganizationInfo> orgs = getOrgInfo();
             body.setOrganizationInfos(orgs);
         }
+        this.AddScanNum();
+        body.setScanNum(this.getScanNum());
+        body.setBuyerNum(buyUsers.size());
         return new ResponseEntity<>(body, headers, HttpStatus.OK);
     }
     /**
