@@ -88,16 +88,16 @@ public class WxServiceClientImpl implements WxServiceClient{
     private Logger logger = LoggerFactory.getLogger(getClass());
 
     @Override
-    public WxLoginResponse getWxLoginInfo(String openId) {
+    public WxLoginResponse getWxLoginInfo(String code) {
         String url = "/sns/jscode2session";
         MultiValueMap<String, String> body;
-        logger.info("getLoginInfo {}", openId);
+        logger.info("getLoginInfo {}", code);
         try {
             String rspStr = webClient.get().
                     uri(uriBuilder -> uriBuilder.path(url)
                             .queryParam("appid", this.appid)
                             .queryParam("secret", this.secretkey)
-                            .queryParam("js_code", openId)
+                            .queryParam("js_code", code)
                             .queryParam("grant_type", "authorization_code").build())
                     .header("Content-Type", "application/json;charset=utf-8")
                     .retrieve().bodyToMono(String.class).timeout(Duration.ofSeconds(3)).block();
@@ -106,7 +106,7 @@ public class WxServiceClientImpl implements WxServiceClient{
                     rsp.getUnionid(), rsp.getOpenid());
             return rsp;
         } catch (Exception err) {
-            logger.info("Request wx error with openid {} err {}", openId, err.getMessage());
+            logger.info("Request wx error with code {} err {}", code, err.getMessage());
         }
         return null;
     }
@@ -151,6 +151,7 @@ public class WxServiceClientImpl implements WxServiceClient{
             param.put("scene", request.getUserId());
             param.put("page", "pages/index/index");
             param.put("width", 247);
+            param.put("env_version", "trial");
             String url = "https://api.weixin.qq.com/wxa/getwxacodeunlimit?access_token=" + accessTokenStr;
             ResponseEntity<byte[]> responseEntity = restTemplate.postForEntity(url, JSON.toJSONString(param), byte[].class);
             byte[] qrBytes = responseEntity.getBody();

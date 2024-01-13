@@ -148,7 +148,8 @@ public class WxPayServiceClientImpl implements WxPayServiceClient {
         request.setNotifyUrl(this.notifyUrl);
         String secStr = String.valueOf(System.currentTimeMillis()/1000);
         request.setOutTradeNo(secStr);
-        request.setAttach(secStr + ":" + buyLessonRequest.getOriginUserId());
+        request.setAttach(buyLessonRequest.getLessons() + ":" + buyLessonRequest.getOriginUserId()
+            + ":" + buyLessonRequest.getChildPhone());
         Payer payer = new Payer();
         payer.setOpenid(buyLessonRequest.getUserId());
         request.setPayer(payer);

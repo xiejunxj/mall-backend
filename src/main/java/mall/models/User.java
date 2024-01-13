@@ -33,6 +33,13 @@ public class User {
     private String buyTime;
     private String buyOrigin;
     private String qrUrl;
+
+    private int buyStatus;
+
+    private String buyLessons;
+    private String childName;
+    private int childAge;
+    private String childPhone;
     public Long getId() {
         return id;
     }
@@ -143,5 +150,45 @@ public class User {
 
     public void setQrUrl(String qrUrl) {
         this.qrUrl = qrUrl;
+    }
+
+    public int getBuyStatus() {
+        return buyStatus;
+    }
+
+    public void setBuyStatus(int buyStatus) {
+        this.buyStatus = buyStatus;
+    }
+
+    public String getChildName() {
+        return childName;
+    }
+
+    public void setChildName(String childName) {
+        this.childName = childName;
+    }
+
+    public int getChildAge() {
+        return childAge;
+    }
+
+    public void setChildAge(int childAge) {
+        this.childAge = childAge;
+    }
+
+    public String getChildPhone() {
+        return childPhone;
+    }
+
+    public void setChildPhone(String childPhone) {
+        this.childPhone = childPhone;
+    }
+
+    public String getBuyLessons() {
+        return buyLessons;
+    }
+
+    public void setBuyLessons(String buyLessons) {
+        this.buyLessons = buyLessons;
     }
 }

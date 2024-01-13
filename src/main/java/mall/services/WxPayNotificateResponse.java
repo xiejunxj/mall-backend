@@ -3,6 +3,8 @@ package mall.services;
 public class WxPayNotificateResponse {
     String transaction_id;
     String mchid;
+
+    String out_trade_no;
     public class Amount {
         Long payer_total;
         Long total;
@@ -134,13 +136,22 @@ public class WxPayNotificateResponse {
         this.payer = payer;
     }
 
+    public String getOut_trade_no() {
+        return out_trade_no;
+    }
+
+    public void setOut_trade_no(String out_trade_no) {
+        this.out_trade_no = out_trade_no;
+    }
+
     public String print() {
         String s = "trade_state: " + this.getTrade_state() + ", trade_state_desc: " + this.getTrade_state_desc()
                 + ", transaction_id: " + this.getTransaction_id() + ", attach: " + this.getAttach()
                 + ", mchId: " + this.getMchid() + ", bank_type: " + this.getBank_type()
                 + ", success_time: " + this.getSuccess_time() + ", open_id: " + this.getPayer().getOpenid()
                 + ", Amount: total " + this.getAmount().getTotal() + " " + this.getAmount().getCurrency()
-                + ", payer_total: " + this.getAmount().getPayer_total() + " " + this.getAmount().getPayer_currency();
+                + ", payer_total: " + this.getAmount().getPayer_total() + " " + this.getAmount().getPayer_currency()
+                + ", out_trade_no: " + this.getOut_trade_no();
         return s;
     }
 }

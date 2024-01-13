@@ -132,28 +132,30 @@ public class MallController {
         }
     }
     @GetMapping("/mallLogin")
-    public ResponseEntity<Object> login(@RequestParam("openid") String openid) {
-        WxLoginResponse rsp =  wxServiceClient.getWxLoginInfo(openid);
+    public ResponseEntity<Object> login(@RequestParam("code") String code) {
+        WxLoginResponse rsp =  wxServiceClient.getWxLoginInfo(code);
         if (rsp == null || (rsp.getErrmsg() != null && !rsp.getErrmsg().isEmpty())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         } else {
+            Optional<User> user = repository.findByOpenId(rsp.getOpenid());
+            logger.debug("Req open id {}", rsp.getOpenid());
+            if (!user.isPresent()) {
+                User my = new User();
+                my.setOpenId(rsp.getOpenid());
+                my.setLoginSession(rsp.getSession_key());
+                try {
+                    User ss = repository.save(my);
+                } catch (DuplicateKeyException e) {
+                    logger.info("openId duplicate in login {} {}", e.getCause(), e.getMessage());
+                } catch (Exception e) {
+                    logger.error("Unnormal exception in login {} {}", e.getCause(), e.getMessage());
+                    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+                }
+            }
             HttpHeaders headers = new HttpHeaders();
             headers.add(HttpHeaders.CONTENT_TYPE, "application/json");
             LoginResponse body = new LoginResponse();
-//            List<BuyUserResponse> buyUsers = getBuyersInfo();
-//            body.setBuyUserInfo(buyUsers);
-            List<OrganizationInfo> orgs = getOrgInfo();
-            body.setOrganizationInfos(orgs);
-            User user = getLoginUser(rsp.getOpenid(), rsp.getSession_key());
-            if (user == null) {
-                return new ResponseEntity<>(null, headers, HttpStatus.INTERNAL_SERVER_ERROR);
-            }
-            body.setAvatarUrl(user.getAvatarUrl());
-            body.setNickName(user.getNickName());
-            body.setUserId(user.getOpenId());
-            body.setLatitude(user.getLatitude());
-            body.setLongitude(user.getLongitude());
-            body.setPosName(user.getPosName());
+            body.setOpenId(rsp.getOpenid());
             return new ResponseEntity<>(body, headers, HttpStatus.OK);
         }
     }
@@ -174,14 +176,19 @@ public class MallController {
         return bodies;
     }
 
-    @GetMapping("/mallGetBuyers")
-    public ResponseEntity<List<BuyUserResponse>> getBuyers() {
-        List<BuyUserResponse> bodies = getBuyersInfo();
+    @GetMapping("/mallGetPageInfo")
+    public ResponseEntity<GetPageInfoResponse> getetPageInfo(@RequestParam(value = "needOrg") int needOrg) {
         HttpHeaders headers = new HttpHeaders();
         headers.add(HttpHeaders.CONTENT_TYPE, "application/json");
-        return new ResponseEntity<>(bodies, headers, HttpStatus.OK);
+        GetPageInfoResponse body = new GetPageInfoResponse();
+        List<BuyUserResponse> buyUsers = getBuyersInfo();
+        body.setBuyUserInfos(buyUsers);
+        if (needOrg == 1) {
+            List<OrganizationInfo> orgs = getOrgInfo();
+            body.setOrganizationInfos(orgs);
+        }
+        return new ResponseEntity<>(body, headers, HttpStatus.OK);
     }
-
     /**
      * 上传文件
      *
@@ -189,46 +196,38 @@ public class MallController {
      * @return
      * @throws IOException
      */
-    @PostMapping(value = "/uploadFile", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<Object> uploadAvatar(@RequestParam(value = "avatarPath") MultipartFile file,
-                                               @RequestParam(value = "uId") String uId) throws IOException {
-        Optional<User> old = repository.findByOpenId(uId);
-        if (!old.isPresent()) {
-            logger.warn("There is no such user but request update {}", uId);
-            return new ResponseEntity<>(null, null, HttpStatus.BAD_REQUEST);
-        }
+    @PostMapping(value = "/mallUpdateUser", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Object> updateUser(@RequestParam(value = "avatarPath") MultipartFile file,
+                                               @RequestParam(value = "uId") String uId,
+                                               @RequestParam(value = "nickName") String nickName) throws IOException {
         HttpHeaders headers = new HttpHeaders();
         headers.add(HttpHeaders.CONTENT_TYPE, "application/json");
+        if (uId.isEmpty() || nickName.isEmpty()) {
+            return new ResponseEntity<>(null, headers, HttpStatus.BAD_REQUEST);
+        }
         try {
+            Optional<User> user = this.repository.findByOpenId(uId);
+            if (!user.isPresent()) {
+                logger.error("Req updateUser fail user {} nickName {}", uId, nickName);
+                return new ResponseEntity<>(null, headers, HttpStatus.BAD_REQUEST);
+            }
             String oriName = file.getOriginalFilename();
             String extension = oriName.substring(oriName.lastIndexOf("."));
             String newName = this.avatarStorePath + "/" + uId + extension;
             FileUtils.writeByteArrayToFile(new File(newName), file.getBytes());
             UploadAvatarResponse body = new UploadAvatarResponse();
-            body.setAvatarUrl(this.serverRootUrl + this.httpDir + "/" + uId + extension);
-            old.get().setAvatarUrl(this.serverRootUrl + this.httpDir + "/" + uId + extension);
-            repository.save(old.get());
-            logger.info("Req success user {} avatarUrl {}", uId,
-                    this.serverRootUrl + this.httpDir + "/" + uId + extension);
+            String avatarUrl = this.serverRootUrl + this.httpDir + "/" + uId + extension;
+            body.setAvatarUrl(avatarUrl);
+            user.get().setAvatarUrl(avatarUrl);
+            user.get().setNickName(nickName);
+            this.repository.save(user.get());
+            logger.info("Req updateUser success user {} avatarUrl {} nickName {}", uId,
+                    avatarUrl, nickName);
             return new ResponseEntity<>(body, headers, HttpStatus.OK);
-        } catch (IOException e) {
+
+        } catch (Exception e) {
             e.printStackTrace();
             return new ResponseEntity<>(null, headers, HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    @PostMapping("/mallUserUpdateNick")
-    public ResponseEntity<Object> updateUserNick(@RequestBody UpdateUserRequest user) {
-        Optional<User> old = repository.findByOpenId(user.getUserId());
-        if (!old.isPresent()) {
-            logger.warn("There is no such user but request update {}", user.getUserId());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-        } else {
-            if (!user.getNickName().isEmpty()) {
-                old.get().setNickName(user.getNickName());
-                repository.save(old.get());
-            }
-            return ResponseEntity.status(HttpStatus.OK).build();
         }
     }
 
@@ -272,19 +271,46 @@ public class MallController {
 
     @PostMapping("/mallUserBuy")
     public ResponseEntity<Object> buyLessonLoc(@RequestBody BuyLessonRequest buyRequest) {
+        if (buyRequest.getLessons().isEmpty() || buyRequest.getChildAge() == 0 || buyRequest.getChildPhone().isEmpty()) {
+            logger.warn("Request not valid {} {} {} {} {} {}", buyRequest.getUserId(),
+                    buyRequest.getLessons(), buyRequest.getChildAge(), buyRequest.getChildName(),
+                    buyRequest.getChildPhone(), buyRequest.getOriginUserId());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
         Optional<User> old = repository.findByOpenId(buyRequest.getUserId());
         if (!old.isPresent()) {
-            logger.warn("There is no such user but request update {}", buyRequest.getUserId());
+            logger.warn("There is no such user but request buy {}", buyRequest.getUserId());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         }
         HttpHeaders headers = new HttpHeaders();
         headers.add(HttpHeaders.CONTENT_TYPE, "application/json");
+        if (old.get().getBuyStatus() > 0) {
+            BuyLessonResponse res = new BuyLessonResponse();
+            res.setError(1);
+            return  new ResponseEntity<>(res, headers, HttpStatus.OK);
+        }
         BuyLessonResponse res = wxPayServiceClient.buyLesson(buyRequest);
+        if (!buyRequest.getOriginUserId().isEmpty()) {
+            Optional<User> originalUser = repository.findByOpenId(buyRequest.getOriginUserId());
+            if (!originalUser.isPresent()) {
+                logger.warn("There is no original user and skip {}", buyRequest.getOriginUserId());
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            old.get().setBuyOrigin(originalUser.get().getOpenId());
+        }
         if (res == null) {
             res = new BuyLessonResponse();
             res.setError(-1);
         } else {
             res.setError(0);
+        }
+        old.get().setChildAge(buyRequest.getChildAge());
+        old.get().setChildPhone(buyRequest.getChildPhone());
+        old.get().setChildName(buyRequest.getChildName());
+        try {
+            this.repository.save(old.get());
+        } catch (Exception e) {
+            res.setError(-1);
         }
         return new ResponseEntity<>(res, headers, HttpStatus.OK);
     }
@@ -300,23 +326,43 @@ public class MallController {
             logger.error("buyLessonNotify user not exist {}", payInfo.getPayer().getOpenid());
             return new ResponseEntity(HttpStatus.EXPECTATION_FAILED);
         }
-        user.get().setBuyTime(payInfo.getAttach().substring(0, 10));
-        String originUser = "";
-        if (payInfo.getAttach().length() > 11) {
-            originUser = payInfo.getAttach().substring(11);
-        }
-        logger.info("User pay success openId {} originUser {}", user.get().getOpenId(), originUser);
-        this.repository.save(user.get());
-        if (!originUser.isEmpty()) {
-            Optional<User> originUserInfo = this.repository.findByOpenId(originUser);
-            if (!originUserInfo.isPresent()) {
-                logger.error("buyLessonNotify user {} originalUser not exist {}", payInfo.getPayer().getOpenid(),
-                        originUser);
-            } else {
-                int moneySum = originUserInfo.get().getMoneySum() + this.getRewardNum();
-                originUserInfo.get().setMoneySum(moneySum);
-                this.repository.save(originUserInfo.get());
+        try {
+            user.get().setBuyTime(payInfo.getOut_trade_no());
+            user.get().setBuyStatus(1);
+            String[] attachStr = payInfo.getAttach().split(":");
+            if (attachStr.length != 3) {
+                logger.error("buyLessonNotify attachStr error {}", payInfo.print());
+                return new ResponseEntity(HttpStatus.EXPECTATION_FAILED);
             }
+            String lessons = attachStr[0];
+            String originUser = attachStr[1];
+            String phoneNumber = attachStr[2];
+            if (!lessons.equals(user.get().getBuyLessons())
+                    || !phoneNumber.equals(user.get().getChildPhone())) {
+                logger.error("notify info is not same with req info rL {} L {} rP {}  p {}",
+                        user.get().getBuyLessons(), lessons, user.get().getChildPhone(), phoneNumber);
+            }
+            logger.info("User pay success openId {} originUser {} attach {}", user.get().getOpenId(), originUser,
+                    payInfo.getAttach());
+            this.repository.save(user.get());
+            try {
+                if (!originUser.isEmpty()) {
+                    Optional<User> originUserInfo = this.repository.findByOpenId(originUser);
+                    if (!originUserInfo.isPresent()) {
+                        logger.error("buyLessonNotify user {} originalUser not exist {}", payInfo.getPayer().getOpenid(),
+                                originUser);
+                    } else {
+                        int moneySum = originUserInfo.get().getMoneySum() + this.getRewardNum();
+                        originUserInfo.get().setMoneySum(moneySum);
+                        this.repository.save(originUserInfo.get());
+                    }
+                }
+            } catch (Exception er) {
+                logger.error("update original user info fail {} {}", er.getMessage(), payInfo.print());
+            }
+        }catch (Exception e) {
+            logger.error("deal notify error {} {}", e.getMessage(), payInfo.print());
+            return new ResponseEntity(HttpStatus.EXPECTATION_FAILED);
         }
         return new ResponseEntity(HttpStatus.OK);
     }
