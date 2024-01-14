@@ -442,7 +442,7 @@ public class MallController{
             HttpHeaders headers = new HttpHeaders();
             headers.add(HttpHeaders.CONTENT_TYPE, "application/json");
             GetMyOrder order = new GetMyOrder();
-            if (!old.get().getBuyTime().isEmpty()) {
+            if (old.get().getBuyTime() != null && !old.get().getBuyTime().isEmpty()) {
                 order.setOrderTime(old.get().getBuyTime());
                 order.setMoney(String.valueOf(this.lessonPrice/100));
             } else {
