@@ -178,28 +178,6 @@ public class MallController{
         this.lessonPrice = lessonPrice;
     }
 
-    private User getLoginUser(String openId, String sessionKey) {
-        Optional<User> user = repository.findByOpenId(openId);
-        logger.debug("Req open id {}", openId);
-        if (!user.isPresent())
-        {
-            User my = new User();
-            my.setOpenId(openId);
-            my.setLoginSession(sessionKey);
-            try {
-                User ss = repository.save(my);
-            } catch (DuplicateKeyException e) {
-                logger.info("openId duplicate in login {} {}", e.getCause(), e.getMessage());
-                return null;
-            } catch (Exception e) {
-                logger.error("Unnormal exception in login {} {}", e.getCause(), e.getMessage());
-                return null;
-            }
-            return my;
-        } else {
-            return user.get();
-        }
-    }
     @GetMapping("/mallLogin")
     public ResponseEntity<Object> login(@RequestParam("code") String code) {
         WxLoginResponse rsp =  wxServiceClient.getWxLoginInfo(code);
@@ -327,19 +305,6 @@ public class MallController{
         }
         return bodies;
     }
-    @RequestMapping("/getvalue")
-    public ResponseEntity<Object> getValue() {
-        HttpHeaders headers = new HttpHeaders();
-        headers.add(HttpHeaders.CONTENT_TYPE, "application/json");
-        UploadAvatarResponse body = new UploadAvatarResponse();
-
-        String url = this.serverRootUrl + this.httpDir ;
-        logger.info("1111111111 {} {}", url, OrgCacheEntity.size());
-        Long id = 1L;
-        OrganizationInfo orgInfo = OrgCacheEntity.get(id);
-        body.setAvatarUrl(orgInfo.getDesc());
-        return new ResponseEntity<>(body, headers, HttpStatus.OK);
-    }
 
     @PostMapping("/mallUserBuy")
     public ResponseEntity<Object> buyLessonLoc(@RequestBody BuyLessonRequest buyRequest) {
@@ -461,6 +426,30 @@ public class MallController{
                 this.repository.save(old.get());
             }
             return new ResponseEntity<>(body, headers, HttpStatus.OK);
+        }
+    }
+
+    @GetMapping("/mallUserGetMyOrder")
+    public ResponseEntity<Object> getMyOrder(@RequestParam("userId") String userId) {
+        if (userId.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+        Optional<User> old = repository.findByOpenId(userId);
+        if (!old.isPresent()) {
+            logger.warn("There is no such user but request update {}", userId);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        } else {
+            HttpHeaders headers = new HttpHeaders();
+            headers.add(HttpHeaders.CONTENT_TYPE, "application/json");
+            GetMyOrder order = new GetMyOrder();
+            if (!old.get().getBuyTime().isEmpty()) {
+                order.setOrderTime(old.get().getBuyTime());
+                order.setMoney(String.valueOf(this.lessonPrice/100));
+            } else {
+                order.setOrderTime("-");
+                order.setMoney("-");
+            }
+            return new ResponseEntity<>(order, headers, HttpStatus.OK);
         }
     }
 
