@@ -40,6 +40,9 @@ public class User {
     private String childName;
     private int childAge;
     private String childPhone;
+
+    private String wxBuyNonce;
+    private String WxTransactionId;
     public Long getId() {
         return id;
     }
@@ -190,5 +193,21 @@ public class User {
 
     public void setBuyLessons(String buyLessons) {
         this.buyLessons = buyLessons;
+    }
+
+    public String getWxBuyNonce() {
+        return wxBuyNonce;
+    }
+
+    public void setWxBuyNonce(String wxBuyNonce) {
+        this.wxBuyNonce = wxBuyNonce;
+    }
+
+    public String getWxTransactionId() {
+        return WxTransactionId;
+    }
+
+    public void setWxTransactionId(String wxTransactionId) {
+        WxTransactionId = wxTransactionId;
     }
 }

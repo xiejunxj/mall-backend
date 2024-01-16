@@ -104,6 +104,10 @@ public class WxServiceClientImpl implements WxServiceClient{
             WxLoginResponse rsp = objectMapper.readValue(rspStr, WxLoginResponse.class);
             logger.info("Request wx success {} {} {} {} {}",rsp.getErrcode(), rsp.getErrmsg(), rsp.getSession_key(),
                     rsp.getUnionid(), rsp.getOpenid());
+            if (rsp.getErrcode() != 0) {
+                logger.error("Request wx ret error {}", rspStr);
+                return null;
+            }
             return rsp;
         } catch (Exception err) {
             logger.info("Request wx error with code {} err {}", code, err.getMessage());

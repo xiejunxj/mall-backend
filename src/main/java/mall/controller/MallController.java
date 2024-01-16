@@ -1,6 +1,5 @@
 package mall.controller;
-;
-import mall.cache.BuyerCache;
+
 import mall.models.*;
 import mall.proto.*;
 import mall.services.WxLoginResponse;
@@ -26,6 +25,7 @@ import javax.annotation.PreDestroy;
 import javax.servlet.http.HttpServletRequest;
 import java.io.File;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 import static mall.cache.OrganizationInfoCache.OrgCacheEntity;
@@ -47,7 +47,7 @@ public class MallController{
 
     private final WxPayServiceClient wxPayServiceClient;
 
-    private BuyerCache buyerCache;
+    private List<BuyUserResponse> buyers;
 
     @Value("${mall.projectId}")
     private int projectId;
@@ -61,6 +61,9 @@ public class MallController{
     public void setProjectUid(Long projectUid) {
         this.projectUid = projectUid;
     }
+
+    @Value("${mall.merchantId}")
+    private String merchantId;
 
     @Value("${mall.avatar-path}")
     private String avatarStorePath;
@@ -79,20 +82,22 @@ public class MallController{
 
     private int scanNum;
     private int active;
+
+    private SimpleDateFormat sdf;
     public MallController(UserRepository repository, ProjectRepository projectRepository, WxServiceClient wxServiceClient,
-                          WxPayServiceClient wxPayServiceClient, BuyerCache buyerCache) {
+                          WxPayServiceClient wxPayServiceClient) {
 
         this.repository = repository;
         this.projectRepository = projectRepository;
         this.wxServiceClient = wxServiceClient;
         this.wxPayServiceClient = wxPayServiceClient;
-        this.buyerCache = buyerCache;
+        this.sdf = new SimpleDateFormat("yyyy-MM-dd");
         this.wxPayServiceClient.start();
+        this.buyers = new ArrayList<>();
     }
 
     @PostConstruct
     public void Init() {
-        this.buyerCache.Start();
         Optional<Project> project = this.projectRepository.findByProjId(this.projectId);
         if (!project.isPresent()) {
             logger.error("ProjectId not in the table {}", this.projectId);
@@ -101,6 +106,17 @@ public class MallController{
         this.setScanNum(project.get().getScanNum());
         this.setActive(project.get().getValid());
         this.setProjectUid(project.get().getId());
+        List<User> userList = this.repository.findByBuyStatus(BuyStatus.BUY_DONE.getValue());
+        double money = this.lessonPrice/100.0;
+        for (User user : userList) {
+            BuyUserResponse response = new BuyUserResponse();
+            response.setUserName(user.getNickName());
+            response.setMoney(money);
+            response.setIconUrl(user.getAvatarUrl());
+            int buyTime = Integer.valueOf(user.getBuyTime());
+            response.setDate(this.sdf.format(new Date(buyTime)));
+            this.buyers.add(response);
+        }
     }
 
     @PreDestroy
@@ -181,7 +197,7 @@ public class MallController{
     @GetMapping("/mallLogin")
     public ResponseEntity<Object> login(@RequestParam("code") String code) {
         WxLoginResponse rsp =  wxServiceClient.getWxLoginInfo(code);
-        if (rsp == null || (rsp.getErrmsg() != null && !rsp.getErrmsg().isEmpty())) {
+        if (rsp == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         } else {
             Optional<User> user = repository.findByOpenId(rsp.getOpenid());
@@ -207,36 +223,22 @@ public class MallController{
         }
     }
 
-    public List<BuyUserResponse> getBuyersInfo() {
-        List<BuyUserResponse> bodies = new ArrayList<>();
-        Iterator<Map.Entry<String, Buyer>> iterator = this.buyerCache.getBuyerCacheEntity().entrySet().iterator();
-        double money = this.getLessonPrice()/100.0;
-        while(iterator.hasNext()){
-            Map.Entry<String, Buyer> entry = iterator.next();
-            BuyUserResponse rsp = new BuyUserResponse();
-            rsp.setDate(entry.getValue().getDate());
-            rsp.setMoney(money);
-            rsp.setIconUrl(entry.getValue().getIconUrl());
-            rsp.setUserName(entry.getValue().getUserName());
-            bodies.add(rsp);
-        }
-        return bodies;
-    }
 
     @GetMapping("/mallGetPageInfo")
     public ResponseEntity<GetPageInfoResponse> getetPageInfo(@RequestParam(value = "needOrg") int needOrg) {
         HttpHeaders headers = new HttpHeaders();
         headers.add(HttpHeaders.CONTENT_TYPE, "application/json");
         GetPageInfoResponse body = new GetPageInfoResponse();
-        List<BuyUserResponse> buyUsers = getBuyersInfo();
-        body.setBuyUserInfos(buyUsers);
+        if (!this.buyers.isEmpty()) {
+            body.setBuyUserInfos(this.buyers);
+        }
+        body.setBuyerNum(this.buyers.size());
         if (needOrg == 1) {
             List<OrganizationInfo> orgs = getOrgInfo();
             body.setOrganizationInfos(orgs);
         }
         this.AddScanNum();
         body.setScanNum(this.getScanNum());
-        body.setBuyerNum(buyUsers.size());
         return new ResponseEntity<>(body, headers, HttpStatus.OK);
     }
     /**
@@ -321,12 +323,17 @@ public class MallController{
         }
         HttpHeaders headers = new HttpHeaders();
         headers.add(HttpHeaders.CONTENT_TYPE, "application/json");
-        if (old.get().getBuyStatus() > 0) {
+        if (old.get().getBuyStatus() == BuyStatus.BUY_DONE.getValue()) {
             BuyLessonResponse res = new BuyLessonResponse();
             res.setError(1);
             return  new ResponseEntity<>(res, headers, HttpStatus.OK);
         }
-        BuyLessonResponse res = wxPayServiceClient.buyLesson(buyRequest);
+        String tradeNo = String.valueOf(System.currentTimeMillis());
+        BuyLessonResponse res = wxPayServiceClient.buyLesson(buyRequest, tradeNo);
+        old.get().setWxBuyNonce(res.getNonceStr());
+        if (res == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
         if (!buyRequest.getOriginUserId().isEmpty()) {
             Optional<User> originalUser = repository.findByOpenId(buyRequest.getOriginUserId());
             if (!originalUser.isPresent()) {
@@ -335,20 +342,25 @@ public class MallController{
             }
             old.get().setBuyOrigin(originalUser.get().getOpenId());
         }
-        if (res == null) {
-            res = new BuyLessonResponse();
-            res.setError(-1);
-        } else {
-            res.setError(0);
-        }
+        old.get().setWxBuyNonce(res.getNonceStr());
         old.get().setChildAge(buyRequest.getChildAge());
         old.get().setChildPhone(buyRequest.getChildPhone());
         old.get().setChildName(buyRequest.getChildName());
+        old.get().setBuyLessons(buyRequest.getLessons());
+        old.get().setBuyOrigin(buyRequest.getOriginUserId());
+        old.get().setBuyTime(tradeNo);
         try {
             this.repository.save(old.get());
         } catch (Exception e) {
-            res.setError(-1);
+            logger.error("save user info to db fail {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         }
+        res.setError(0);
+        logger.info("wx req order openid {} originUser {} lessons {} phone {} childName {} age {} tradeNo {} nonce {}" +
+                        " package {} paysign {} stamp {}",
+                buyRequest.getUserId(), buyRequest.getOriginUserId(), buyRequest.getLessons(),
+                buyRequest.getChildPhone(), buyRequest.getChildName(), buyRequest.getChildAge(),
+                tradeNo, res.getNonceStr(), res.getPackageVal(), res.getPaySign(), res.getTimeStamp());
         return new ResponseEntity<>(res, headers, HttpStatus.OK);
     }
 
@@ -358,30 +370,50 @@ public class MallController{
         if (payInfo == null) {
             return new ResponseEntity(HttpStatus.EXPECTATION_FAILED);
         }
+        if (!payInfo.getMchid().equals(this.merchantId)) {
+            logger.warn("notify mchantId is not right {} {}", payInfo.getMchid(), this.merchantId);
+            return new ResponseEntity(HttpStatus.EXPECTATION_FAILED);
+        }
         Optional<User> user = this.repository.findByOpenId(payInfo.getPayer().getOpenid());
         if (!user.isPresent()) {
             logger.error("buyLessonNotify user not exist {}", payInfo.getPayer().getOpenid());
             return new ResponseEntity(HttpStatus.EXPECTATION_FAILED);
         }
+        String[] attachStr = payInfo.getAttach().split(":");
+        if (attachStr.length != 3) {
+            logger.error("buyLessonNotify attachStr error {}", payInfo.print());
+            return new ResponseEntity(HttpStatus.EXPECTATION_FAILED);
+        }
+        String lessons = attachStr[0];
+        String originUser = attachStr[1];
+        String phoneNumber = attachStr[2];
+        if (!lessons.equals(user.get().getBuyLessons())
+                || !phoneNumber.equals(user.get().getChildPhone())) {
+            logger.warn("notify info is not same with req info rL {} L {} rP {}  p {}",
+                    user.get().getBuyLessons(), lessons, user.get().getChildPhone(), phoneNumber);
+        }
         try {
-            user.get().setBuyTime(payInfo.getOut_trade_no());
-            user.get().setBuyStatus(1);
-            String[] attachStr = payInfo.getAttach().split(":");
-            if (attachStr.length != 3) {
-                logger.error("buyLessonNotify attachStr error {}", payInfo.print());
+            if (!user.get().getBuyTime().equals(payInfo.getOut_trade_no())) {
+                logger.error("there is no such trade no in this user openid {} tradeNo {} realTradeNo {} " +
+                                "wx_transaction_id {} attachStr {} mchId {}",
+                        user.get().getOpenId(), payInfo.getOut_trade_no(), user.get().getBuyTime(),
+                        payInfo.getTransaction_id(), payInfo.getAttach(), payInfo.getMchid());
                 return new ResponseEntity(HttpStatus.EXPECTATION_FAILED);
             }
-            String lessons = attachStr[0];
-            String originUser = attachStr[1];
-            String phoneNumber = attachStr[2];
-            if (!lessons.equals(user.get().getBuyLessons())
-                    || !phoneNumber.equals(user.get().getChildPhone())) {
-                logger.error("notify info is not same with req info rL {} L {} rP {}  p {}",
-                        user.get().getBuyLessons(), lessons, user.get().getChildPhone(), phoneNumber);
+            if (user.get().getBuyStatus() == BuyStatus.BUY_DONE.getValue()) {
+                if (!user.get().getBuyLessons().equals(lessons) || user.get().getChildPhone().equals(phoneNumber)) {
+                    logger.error("done buy with different lessons or phoneNumber. phoneNumber {} real phoneNumber {} " +
+                            "lessons {} real lessons {} transaction_id {} tradeNo {} openid {}",
+                            phoneNumber, user.get().getChildPhone(), lessons, user.get().getBuyLessons(),
+                            payInfo.getTransaction_id(), payInfo.getOut_trade_no(), user.get().getOpenId());
+                }
+                return new ResponseEntity(HttpStatus.OK);
             }
+            user.get().setWxTransactionId(payInfo.getTransaction_id());
+            user.get().setBuyStatus(BuyStatus.BUY_DONE.getValue());
+            this.repository.save(user.get());
             logger.info("User pay success openId {} originUser {} attach {}", user.get().getOpenId(), originUser,
                     payInfo.getAttach());
-            this.repository.save(user.get());
             try {
                 if (!originUser.isEmpty()) {
                     Optional<User> originUserInfo = this.repository.findByOpenId(originUser);
@@ -395,12 +427,21 @@ public class MallController{
                     }
                 }
             } catch (Exception er) {
-                logger.error("update original user info fail {} {}", er.getMessage(), payInfo.print());
+                logger.error("Need change by superuser. Original user {} fail to add money by user {} buy",
+                        originUser, payInfo.getPayer().getOpenid());
             }
-        }catch (Exception e) {
+        } catch (Exception e) {
             logger.error("deal notify error {} {}", e.getMessage(), payInfo.print());
             return new ResponseEntity(HttpStatus.EXPECTATION_FAILED);
         }
+        BuyUserResponse buyUserResponse = new BuyUserResponse();
+        buyUserResponse.setUserName(user.get().getNickName());
+        buyUserResponse.setIconUrl(user.get().getAvatarUrl());
+        double money = (double)this.lessonPrice/100.0;
+        buyUserResponse.setMoney(money);
+        long buyTime = Long.parseLong(payInfo.getOut_trade_no());
+        buyUserResponse.setDate(this.sdf.format(new Date(buyTime)));
+        this.buyers.add(buyUserResponse);
         return new ResponseEntity(HttpStatus.OK);
     }
 
@@ -443,8 +484,9 @@ public class MallController{
             headers.add(HttpHeaders.CONTENT_TYPE, "application/json");
             GetMyOrder order = new GetMyOrder();
             if (old.get().getBuyTime() != null && !old.get().getBuyTime().isEmpty()) {
+                double money = (double)this.lessonPrice/100.0;
                 order.setOrderTime(old.get().getBuyTime());
-                order.setMoney(String.valueOf(this.lessonPrice/100));
+                order.setMoney(String.valueOf(money));
             } else {
                 order.setOrderTime("-");
                 order.setMoney("-");

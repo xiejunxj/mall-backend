@@ -137,7 +137,7 @@ public class WxPayServiceClientImpl implements WxPayServiceClient {
         this.notifyUrl = notifyUrl;
     }
 
-    private PrepayWithRequestPaymentResponse prepayWithRequestPayment(BuyLessonRequest buyLessonRequest) {
+    private PrepayWithRequestPaymentResponse prepayWithRequestPayment(BuyLessonRequest buyLessonRequest, String tradeNo) {
         PrepayRequest request = new PrepayRequest();
         Amount amount = new Amount();
         amount.setTotal(this.lessonPrice);
@@ -146,8 +146,7 @@ public class WxPayServiceClientImpl implements WxPayServiceClient {
         request.setMchid(this.merchantId);
         request.setDescription(this.payDesc);
         request.setNotifyUrl(this.notifyUrl);
-        String secStr = String.valueOf(System.currentTimeMillis()/1000);
-        request.setOutTradeNo(secStr);
+        request.setOutTradeNo(tradeNo);
         request.setAttach(buyLessonRequest.getLessons() + ":" + buyLessonRequest.getOriginUserId()
             + ":" + buyLessonRequest.getChildPhone());
         Payer payer = new Payer();
@@ -157,9 +156,9 @@ public class WxPayServiceClientImpl implements WxPayServiceClient {
     }
 
     @Override
-    public BuyLessonResponse buyLesson(BuyLessonRequest buyLessonRequest) {
+    public BuyLessonResponse buyLesson(BuyLessonRequest buyLessonRequest, String tradeNo) {
         try {
-            PrepayWithRequestPaymentResponse response = prepayWithRequestPayment(buyLessonRequest);
+            PrepayWithRequestPaymentResponse response = prepayWithRequestPayment(buyLessonRequest, tradeNo);
             BuyLessonResponse res = new BuyLessonResponse();
             res.setPaySign(response.getPaySign());
             res.setTimeStamp(response.getTimeStamp());
@@ -192,7 +191,7 @@ public class WxPayServiceClientImpl implements WxPayServiceClient {
             // 模拟支付成功回调通知API
 //            String callBackIn = "{\"id\":\"123\",\"create_time\":\"2020-11-02T16:31:35+08:00\",\"resource_type\":\"encrypt-resource\",\"event_type\":\"PAYSCORE.USER_PAID\",\"summary\":\"微信支付分服务订单支付成功\",\"resource\":{\"original_type\":\"payscore\",\"algorithm\":\"AEAD_AES_256_GCM\",\"ciphertext\":\"1111111111==\",\"associated_data\":\"payscore\",\"nonce\":\"12321321\"}}";
 
-            logger.info("【微信支付分免密支付回调】：" + callBackIn);
+            logger.info("wxpay callback：" + callBackIn);
 
             JSONObject notifyIn = JSONObject.parseObject(callBackIn);
             if (notifyIn == null) {
@@ -209,19 +208,19 @@ public class WxPayServiceClientImpl implements WxPayServiceClient {
             if (StringUtils.isEmpty(decryptToString)) {
                 return null;
             }
-            logger.info("【支付分支付回调解密结果：】" + decryptToString);
+            logger.info("【wxpay callback descry result: " + decryptToString);
             WxPayNotificateResponse payIn = JSONObject.parseObject(decryptToString, WxPayNotificateResponse.class);
             if (payIn == null) {
-                logger.error("参数不正确，反序列化失败");
+                logger.error("wx pay parameter error, fail to deseries");
                 return null;
             }
-            if (payIn.getTrade_state() == "SUCCESS") {
+            if (payIn.getTrade_state().equals("SUCCESS")) {
                 logger.info(payIn.print());
                 return payIn;
             }
             return null;
         } catch (Exception e) {
-            logger.error("微信支付回调处理异常，" + e.toString());
+            logger.error("wx pay callback deal error" + e.toString());
             return null;
         }
     }
