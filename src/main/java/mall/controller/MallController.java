@@ -113,7 +113,7 @@ public class MallController{
             response.setUserName(user.getNickName());
             response.setMoney(money);
             response.setIconUrl(user.getAvatarUrl());
-            int buyTime = Integer.valueOf(user.getBuyTime());
+            long buyTime = Long.parseLong(user.getBuyTime());
             response.setDate(this.sdf.format(new Date(buyTime)));
             this.buyers.add(response);
         }
