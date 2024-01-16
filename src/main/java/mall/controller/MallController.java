@@ -83,7 +83,6 @@ public class MallController{
     private int scanNum;
     private int active;
 
-    private SimpleDateFormat sdf;
     public MallController(UserRepository repository, ProjectRepository projectRepository, WxServiceClient wxServiceClient,
                           WxPayServiceClient wxPayServiceClient) {
 
@@ -91,7 +90,6 @@ public class MallController{
         this.projectRepository = projectRepository;
         this.wxServiceClient = wxServiceClient;
         this.wxPayServiceClient = wxPayServiceClient;
-        this.sdf = new SimpleDateFormat("yyyy-MM-dd");
         this.wxPayServiceClient.start();
         this.buyers = new ArrayList<>();
     }
@@ -108,13 +106,14 @@ public class MallController{
         this.setProjectUid(project.get().getId());
         List<User> userList = this.repository.findByBuyStatus(BuyStatus.BUY_DONE.getValue());
         double money = this.lessonPrice/100.0;
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
         for (User user : userList) {
             BuyUserResponse response = new BuyUserResponse();
             response.setUserName(user.getNickName());
             response.setMoney(money);
             response.setIconUrl(user.getAvatarUrl());
             long buyTime = Long.parseLong(user.getBuyTime());
-            response.setDate(this.sdf.format(new Date(buyTime)));
+            response.setDate(sdf.format(new Date(buyTime)));
             this.buyers.add(response);
         }
     }
@@ -440,7 +439,8 @@ public class MallController{
         double money = (double)this.lessonPrice/100.0;
         buyUserResponse.setMoney(money);
         long buyTime = Long.parseLong(payInfo.getOut_trade_no());
-        buyUserResponse.setDate(this.sdf.format(new Date(buyTime)));
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        buyUserResponse.setDate(sdf.format(new Date(buyTime)));
         this.buyers.add(buyUserResponse);
         return new ResponseEntity(HttpStatus.OK);
     }
@@ -485,7 +485,9 @@ public class MallController{
             GetMyOrder order = new GetMyOrder();
             if (old.get().getBuyTime() != null && !old.get().getBuyTime().isEmpty()) {
                 double money = (double)this.lessonPrice/100.0;
-                order.setOrderTime(old.get().getBuyTime());
+                long orderTime = Long.parseLong(old.get().getBuyTime());
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                order.setOrderTime(sdf.format(new Date(orderTime)));
                 order.setMoney(String.valueOf(money));
             } else {
                 order.setOrderTime("-");
